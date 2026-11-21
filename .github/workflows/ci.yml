@@ -70,10 +70,14 @@ jobs:
         with:
           path: dist
 
-      - name: Publish Release with Artifacts
+      - name: Package & Publish Release with Artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/**/* \
+          tar -czf "ivi-volume-${GITHUB_REF_NAME}-gcc.tar.gz" -C dist/ivi-volume-gcc .
+          tar -czf "ivi-volume-${GITHUB_REF_NAME}-clang.tar.gz" -C dist/ivi-volume-clang .
+          gh release create "${GITHUB_REF_NAME}" \
+            "ivi-volume-${GITHUB_REF_NAME}-gcc.tar.gz" \
+            "ivi-volume-${GITHUB_REF_NAME}-clang.tar.gz" \
             --title "IVI Volume Module ${GITHUB_REF_NAME}" \
             --generate-notes
