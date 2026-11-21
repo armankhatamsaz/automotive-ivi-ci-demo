@@ -12,3 +12,4 @@ int clamp_volume(int level) {
 
 int change_volume(int current, int delta) {
     return clamp_volume(current + delta);
+}
