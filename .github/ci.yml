@@ -1,0 +1,79 @@
+name: Automotive IVI CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  static-lint:
+    name: Static Lint (cppcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck on C source
+        run: cppcheck --enable=warning,style,performance --error-exitcode=1 src/
+
+  build-and-test:
+    name: Build & Test (${{ matrix.cc }})
+    needs: static-lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cc: gcc
+            cxx: g++
+          - cc: clang
+            cxx: clang++
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Python CI Orchestrator (CMake + CTest)
+        run: |
+          python3 scripts/build.py \
+            --cc ${{ matrix.cc }} \
+            --cxx ${{ matrix.cxx }} \
+            --build-dir build-${{ matrix.cc }}
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ivi-volume-${{ matrix.cc }}
+          path: |
+            build-${{ matrix.cc }}/libivi_volume.a
+            build-${{ matrix.cc }}/compile_commands.json
+
+  release:
+    name: Create GitHub Release
+    needs: build-and-test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download All Compiler Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish Release with Artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/**/* \
+            --title "IVI Volume Module ${GITHUB_REF_NAME}" \
+            --generate-notes
